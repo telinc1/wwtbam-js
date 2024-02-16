@@ -1,0 +1,191 @@
+<% title = 'Game' %> <%- include('../templates/head.ejs'); %> <%- include('../templates/navigation.ejs'); %>
+
+<script src="//unpkg.com/alpinejs" defer></script>
+<script
+    src="https://cdn.socket.io/4.7.4/socket.io.min.js"
+    integrity="sha384-Gr6Lu2Ajx28mzwyVR8CFkULdCU7kMlZ9UthllibdOSo6qAiN+yXNHqtgdTvFXMT4"
+    crossorigin="anonymous"
+></script>
+
+<div
+    class="container mt-3"
+    x-data="{
+            game: { state: { type: 'unknown' } },
+            playerID: <%= JSON.stringify(playerID) %>,
+            player: null,
+            lastQuestion: null,
+            lastAnswers: [],
+            removedAnswers: [],
+            needAnswers: 1,
+        }"
+    @gamestate.window="
+            game = $event.detail;
+
+            player = game.players.find((player) => player.id == playerID);
+
+            if(game.state.type !== 'question' || game.state.question != lastQuestion) {
+                lastQuestion = game.state.question;
+                lastAnswers = [];
+                removedAnswers = [];
+                needAnswers = 1;
+            }
+        "
+    @removeanswers.window="removedAnswers = $event.detail.answers"
+>
+    <!-- Lobby -->
+    <template x-if="game.state.type === 'lobby'">
+        <div>
+            <h2>Lobby</h2>
+            <strong>Current players:</strong>
+            <ul>
+                <template x-for="player in game.players">
+                    <li
+                        x-text="`${(player.isHost) ? 'Host: ' : ''}${player.data.name} ${player.data.family_name}`"
+                    ></li>
+                </template>
+            </ul>
+            <template x-if="player.isHost">
+                <div>
+                    <div class="mb-3">
+                        <strong>Game code:</strong>
+                        <span class="user-select-all" x-text="game.gameID"></span>
+                    </div>
+                    <button class="btn btn-primary" @click="$dispatch('send', { type: 'startGame' })">
+                        Start Game!
+                    </button>
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- Question -->
+    <template x-if="game.state.type === 'question'">
+        <div class="row">
+            <div class="col-9">
+                <strong x-text="game.state.question" class="d-block text-center mb-3 fs-2"></strong>
+                <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr">
+                    <template x-for="option in game.state.options">
+                        <button
+                            :class="{
+                                    'pe-none': (lastAnswers.length >= needAnswers || removedAnswers.includes(option)),
+                                    btn: true,
+                                    'btn-primary': !lastAnswers.includes(option),
+                                    'btn-warning': lastAnswers.includes(option),
+                                }"
+                            :disabled="lastAnswers.includes(option)"
+                            x-text="removedAnswers.includes(option) ? ' ' : option"
+                            @click="if(!removedAnswers.includes(option)) {
+                                lastAnswers = [...lastAnswers, option];
+
+                                if(lastAnswers.length === needAnswers) {
+                                    $dispatch('send', {
+                                        type: 'answerQuestion',
+                                        answer: lastAnswers[0],
+                                        additionalAnswer: lastAnswers[1]
+                                    });
+                                }
+                            }"
+                        ></button>
+                    </template>
+                </div>
+            </div>
+            <div class="col">
+                <strong>Lifelines</strong>
+                <div class="d-flex gap-1">
+                    <template
+                        x-for="(name, key) in {fiftyfifty: 'Fifty-fifty', switch: 'Switch', doubledip: 'Double Dip'}"
+                    >
+                        <button
+                            class="btn btn-primary"
+                            x-text="name"
+                            :disabled="player.usedLifelines.includes(key)"
+                            @click="!player.usedLifelines.includes(key) && ($dispatch('send', { type: 'useLifeline', lifeline: key }), (key === 'doubledip' && (needAnswers = 2)))"
+                        ></button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Leaderboard / Results -->
+    <template x-if="game.state.type === 'leaderboard' || game.state.type === 'results'">
+        <div>
+            <template x-if="game.state.type === 'results'">
+                <h2>Final Results</h2>
+            </template>
+            <strong x-text="game.state.question" class="d-block text-center mb-3 fs-2"></strong>
+            <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr">
+                <template x-for="option in game.state.options">
+                    <span
+                        :class="{
+                                'pe-none': true,
+                                btn: true,
+                                'btn-success': option == game.state.correctOption,
+                                'btn-danger': option != game.state.correctOption && (game.state.answers?.[playerID] == option || game.state.additionalAnswers?.[playerID] == option) && (game.state.answers?.[playerID] != game.state.correctOption && game.state.additionalAnswers?.[playerID] != game.state.correctOption),
+                                'btn-secondary': option != game.state.correctOption && ((game.state.answers?.[playerID] != option || game.state.additionalAnswers?.[playerID] == game.state.correctOption) || (game.state.additionalAnswers?.[playerID] != option || game.state.answers?.[playerID] == game.state.correctOption)),
+                            }"
+                        x-text="option"
+                    ></span>
+                </template>
+            </div>
+            <template x-if="game.state.type === 'leaderboard'">
+                <div class="d-grid mt-3">
+                    <button
+                        class="btn btn-primary"
+                        :disabled="game.state.continuedPlayers?.includes(playerID)"
+                        @click="!game.state.continuedPlayers?.includes(playerID) && $dispatch('send', { type: 'continue' })"
+                    >
+                        Continue
+                    </button>
+                </div>
+            </template>
+        </div>
+    </template>
+</div>
+
+<script type="text/x-jwt" id="auth-cookie">
+    <%= auth %>
+</script>
+
+<script>
+    const authCookie = document.getElementById("auth-cookie").innerText.trim();
+
+    document.addEventListener("alpine:initialized", () => {
+        const socket = io(window.location.host, {
+            auth: {
+                token: authCookie,
+            },
+        });
+
+        socket.on("connect", () => {
+            const url = new URL(window.location.href);
+            const gameID = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
+
+            socket.send(
+                JSON.stringify({
+                    type: "joinGame",
+                    gameID,
+                }),
+            );
+        });
+
+        socket.on("message", (json) => {
+            const message = JSON.parse(json);
+
+            window.dispatchEvent(
+                new CustomEvent(message.type.toLowerCase(), {
+                    detail: message,
+                }),
+            );
+
+            // Debug console.log for easier presentation
+            console.log(message);
+        });
+
+        window.addEventListener("send", (event) => {
+            socket.send(JSON.stringify(event.detail));
+        });
+    });
+</script>
+
+<%- include('../templates/foot.ejs'); %>

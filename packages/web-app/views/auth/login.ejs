@@ -1,0 +1,26 @@
+<% title = 'Login' %>
+<%- include('../templates/head.ejs'); %>
+<%- include('../templates/navigation.ejs'); %>
+
+<div class="container">
+    <h1>Login</h1>
+    <form action="/auth/login" method="post">
+        <div class="mb-3">
+            <label for="form-email" class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" id="form-email">
+        <% if(errors?.email) { %>
+            <div class="p-3 mt-2 bg-danger text-white"><%= errors.email.msg %></div>
+        <% } %>
+        </div>
+        <div class="mb-3">
+            <label for="form-password" class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" id="form-password">
+        <% if(errors?.password) { %>
+            <div class="p-3 mt-2 bg-danger text-white"><%= errors.password.msg %></div>
+        <% } %>
+        </div>
+        <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+</div>
+
+<%- include('../templates/foot.ejs'); %>

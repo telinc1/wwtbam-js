@@ -1,0 +1,21 @@
+<% title = 'Enter code' %> <%- include('../templates/head.ejs'); %> <%- include('../templates/navigation.ejs'); %>
+
+<div class="container mt-5">
+    <h1 class="mb-4">Insert the game code</h1>
+    <form onsubmit="location.replace(`/game/${new FormData(this).get('code')}`); return false;">
+        <div class="mb-3">
+            <label for="gameCode" class="form-label">Game Code:</label>
+            <input
+                type="code"
+                name="code"
+                class="form-control"
+                pattern="^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                required
+                id="gameCode"
+            />
+        </div>
+        <button type="submit" class="btn btn-primary">Join</button>
+    </form>
+</div>
+
+<%- include('../templates/foot.ejs'); %>
